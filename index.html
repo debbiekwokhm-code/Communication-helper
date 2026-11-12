@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>雙向語音文字助手 | Voice & Text Helper</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang HK", "Microsoft JhengHei", Arial, sans-serif;
+        }
+
+        body {
+            background-color: #FFFDF7; /* Warm off-white to prevent glare */
+            color: #111111;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            padding: 12px 16px;
+            gap: 12px;
+        }
+
+        /* Top Bar: Language, Font Size & Clear */
+        .top-bar {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .btn-top {
+            padding: 14px 16px;
+            font-size: 24px;
+            font-weight: bold;
+            border: 3px solid #333333;
+            border-radius: 14px;
+            background-color: #FFFFFF;
+            color: #222222;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .btn-lang {
+            flex: 1;
+            min-width: 120px;
+        }
+
+        .btn-lang.active {
+            background-color: #0056B3;
+            color: #FFFFFF;
+            border-color: #003D82;
+        }
+
+        .font-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-font {
+            width: 64px;
+            background-color: #F0F4F8;
+        }
+
+        .btn-clear {
+            background-color: #EEEEEE;
+        }
+
+        .btn-top:active {
+            transform: scale(0.97);
+        }
+
+        /* Status / Error Banner */
+        #status-msg {
+            text-align: center;
+            font-size: 20px;
+            color: #B02A37;
+            font-weight: bold;
+            min-height: 24px;
+        }
+
+        /* Main Display Area (Speech-to-Text Output) */
+        .display-box {
+            flex: 1;
+            background-color: #FFFFFF;
+            border: 4px solid #111111;
+            border-radius: 18px;
+            padding: 20px;
+            overflow-y: auto;
+            box-shadow: inset 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        /* Default font size controlled via JS variable (up to 200px) */
+        #text-wrapper {
+            font-size: 56px;
+            line-height: 1.35;
+            font-weight: 600;
+            word-wrap: break-word;
+        }
+
+        #final-text {
+            color: #000000;
+        }
+
+        #interim-text {
+            color: #0056B3;
+        }
+
+        .placeholder {
+            color: #666666;
+            font-weight: normal;
+        }
+
+        /* Primary Action: Huge Speak Button */
+        #btn-speak {
+            width: 100%;
+            padding: 22px 16px;
+            font-size: 32px;
+            font-weight: bold;
+            border: none;
+            border-radius: 18px;
+            background-color: #198754;
+            color: #FFFFFF;
+            cursor: pointer;
+            box-shadow: 0 5px 0 #0F5132;
+        }
+
+        #btn-speak.listening {
+            background-color: #DC3545;
+            box-shadow: 0 5px 0 #842029;
+            animation: pulse 1.5s infinite;
+        }
+
+        #btn-speak:active {
+            transform: translateY(3px);
+            box-shadow: none;
+        }
+
+        /* Bottom Section: Type & Read Aloud (Text-to-Speech) */
+        .tts-section {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            background-color: #F4F1EA;
+            padding: 12px;
+            border-radius: 16px;
+            border: 2px solid #CCCCCC;
+        }
+
+        .quick-replies {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+        }
+
+        .btn-quick {
+            padding: 8px 14px;
+            font-size: 20px;
+            font-weight: bold;
+            background-color: #FFFFFF;
+            border: 2px solid #666666;
+            border-radius: 10px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .tts-input-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        #tts-input {
+            flex: 1;
+            padding: 14px 16px;
+            font-size: 26px;
+            border: 3px solid #333333;
+            border-radius: 14px;
+            background-color: #FFFFFF;
+        }
+
+        #btn-read {
+            padding: 14px 22px;
+            font-size: 26px;
+            font-weight: bold;
+            background-color: #E67E22;
+            color: #FFFFFF;
+            border: none;
+            border-radius: 14px;
+            cursor: pointer;
+            box-shadow: 0 4px 0 #A04000;
+            white-space: nowrap;
+        }
+
+        #btn-read:active {
+            transform: translateY(3px);
+            box-shadow: none;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.85; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Top Controls -->
+    <div class="top-bar">
+        <button id="lang-yue" class="btn-top btn-lang active" onclick="setLanguage('yue-Hant-HK')">廣東話</button>
+        <button id="lang-en" class="btn-top btn-lang" onclick="setLanguage('en-US')">English</button>
+        
+        <div class="font-controls">
+            <button class="btn-top btn-font" onclick="changeFontSize(-12)" title="縮小字體 / Smaller">A-</button>
+            <button class="btn-top btn-font" onclick="changeFontSize(12)" title="放大字體 / Larger">A+</button>
+        </div>
+
+        <button class="btn-top btn-clear" onclick="clearText()">清除 / Clear</button>
+    </div>
+
+    <!-- Status Message -->
+    <div id="status-msg"></div>
+
+    <!-- Main Speech-to-Text Display -->
+    <div class="display-box" id="display-box">
+        <div id="text-wrapper">
+            <span id="placeholder" class="placeholder">請按綠色按鈕說話...<br>Tap the green button to speak...</span>
+            <span id="final-text"></span><span id="interim-text"></span>
+        </div>
+    </div>
+
+    <!-- Primary Speak Button -->
+    <button id="btn-speak" onclick="toggleSpeech()">🎤 按此說話 / Speak</button>
+
+    <!-- Two-Way Reply: Type & Read Aloud -->
+    <div class="tts-section">
+        <div class="quick-replies">
+            <button class="btn-quick" onclick="speakPreset('唔該晒')">唔該晒</button>
+            <button class="btn-quick" onclick="speakPreset('請講慢少少')">請講慢少少</button>
+            <button class="btn-quick" onclick="speakPreset('我聽唔清楚，請再講一次')">請再講一次</button>
+            <button class="btn-quick" onclick="speakPreset('Thank you')">Thank you</button>
+            <button class="btn-quick" onclick="speakPreset('Please speak slowly')">Speak slowly</button>
+        </div>
+        <div class="tts-input-row">
+            <input type="text" id="tts-input" placeholder="輸入文字讓電腦讀出 / Type to read aloud...">
+            <button id="btn-read" onclick="readAloud()">🔊 朗讀 / Read</button>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. Font Size Management (Max 200px) ---
+        let currentFontSize = 56; // Default size in px
+        const textWrapper = document.getElementById('text-wrapper');
+
+        function changeFontSize(delta) {
+            currentFontSize = Math.min(200, Math.max(28, currentFontSize + delta));
+            textWrapper.style.fontSize = currentFontSize + 'px';
+        }
+
+        // --- 2. Speech-to-Text (Listening & Permanent Permission Helper) ---
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const btnSpeak = document.getElementById('btn-speak');
+        const finalSpan = document.getElementById('final-text');
+        const interimSpan = document.getElementById('interim-text');
+        const placeholder = document.getElementById('placeholder');
+        const statusMsg = document.getElementById('status-msg');
+        const displayBox = document.getElementById('display-box');
+
+        let recognition;
+        let isListening = false;
+        let currentLang = 'yue-Hant-HK';
+        let finalTranscript = '';
+
+        // Request microphone access once on startup so the browser remembers it
+        async function initMicrophonePermission() {
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    stream.getTracks().forEach(track => track.stop());
+                } catch (err) {
+                    console.log("Microphone permission prompt note: " + err.message);
+                }
+            }
+        }
+
+        if (!SpeechRecognition) {
+            statusMsg.textContent = "此瀏覽器不支援語音輸入，請使用 Chrome 或 Edge。 / Please use Chrome or Edge.";
+            btnSpeak.disabled = true;
+            btnSpeak.style.backgroundColor = "#888888";
+        } else {
+            recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = currentLang;
+
+            recognition.onstart = function() {
+                isListening = true;
+                statusMsg.textContent = "";
+                btnSpeak.classList.add('listening');
+                btnSpeak.innerHTML = "🛑 聆聽中... 按此停止 / Stop";
+            };
+
+            recognition.onresult = function(event) {
+                placeholder.style.display = 'none';
+                let interimTranscript = '';
+
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        const spacer = currentLang === 'en-US' ? ' ' : '，';
+                        finalTranscript += event.results[i][0].transcript + spacer;
+                    } else {
+                        interimTranscript += event.results[i][0].transcript;
+                    }
+                }
+
+                finalSpan.textContent = finalTranscript;
+                interimSpan.textContent = interimTranscript;
+                displayBox.scrollTop = displayBox.scrollHeight;
+            };
+
+            recognition.onerror = function(event) {
+                if (event.error === 'not-allowed') {
+                    statusMsg.textContent = "請允許使用麥克風 / Please allow microphone access.";
+                } else if (event.error === 'no-speech') {
+                    statusMsg.textContent = "聽不到聲音，請再試一次 / No speech detected.";
+                } else {
+                    statusMsg.textContent = "發生錯誤 / Error: " + event.error;
+                }
+                stopListeningUI();
+            };
+
+            recognition.onend = function() {
+                stopListeningUI();
+            };
+        }
+
+        function toggleSpeech() {
+            if (!recognition) return;
+
+            if (isListening) {
+                recognition.stop();
+            } else {
+                window.speechSynthesis.cancel();
+                recognition.lang = currentLang;
+                try {
+                    recognition.start();
+                } catch (e) {
+                    recognition.stop();
+                }
+            }
+        }
+
+        function stopListeningUI() {
+            isListening = false;
+            btnSpeak.classList.remove('listening');
+            btnSpeak.innerHTML = "🎤 按此說話 / Speak";
+        }
+
+        function setLanguage(lang) {
+            currentLang = lang;
+            document.getElementById('lang-yue').classList.toggle('active', lang === 'yue-Hant-HK');
+            document.getElementById('lang-en').classList.toggle('active', lang === 'en-US');
+
+            if (isListening) {
+                recognition.stop();
+                setTimeout(() => {
+                    recognition.lang = currentLang;
+                    recognition.start();
+                }, 300);
+            }
+        }
+
+        function clearText() {
+            finalTranscript = '';
+            finalSpan.textContent = '';
+            interimSpan.textContent = '';
+            placeholder.style.display = 'inline';
+            statusMsg.textContent = '';
+            document.getElementById('tts-input').value = '';
+        }
+
+        // --- 3. Text-to-Speech (Read Aloud) ---
+        function readAloud(customText) {
+            const inputField = document.getElementById('tts-input');
+            const textToSpeak = customText || inputField.value.trim();
+
+            if (!textToSpeak) {
+                statusMsg.textContent = "請先輸入文字 / Please type text to read aloud.";
+                return;
+            }
+
+            if (isListening && recognition) {
+                recognition.stop();
+            }
+
+            statusMsg.textContent = "";
+            window.speechSynthesis.cancel();
+
+            const utterance = new SpeechSynthesisUtterance(textToSpeak);
+            const hasChinese = /[\u4e00-\u9fa5]/.test(textToSpeak);
+            utterance.lang = hasChinese ? 'zh-HK' : 'en-US';
+            utterance.rate = 0.9;
+
+            window.speechSynthesis.speak(utterance);
+        }
+
+        function speakPreset(phrase) {
+            document.getElementById('tts-input').value = phrase;
+            readAloud(phrase);
+        }
+
+        document.getElementById('tts-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                readAloud();
+            }
+        });
+
+        window.onload = function() {
+            initMicrophonePermission();
+        };
+    </script>
+</body>
+</html>
